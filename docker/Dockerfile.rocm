@@ -1,0 +1,46 @@
+# ROCm image for tabbyAPI: builds the exllamav3 HIP extension from source
+# via the pyproject `rocm` extra, against the image's PyTorch/ROCm stack.
+# Devel headers come from AMD's wheel index, matching the image's ROCm
+# version. Never install or upgrade torch or the rocm runtime wheels here --
+# the image's stack is the toolchain.
+FROM rocm/pytorch:rocm7.14.1_ubuntu24.04_py3.13_pytorch_release_2.12.0
+
+# Devel headers for the from-source HIP build
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install --index-url https://repo.amd.com/rocm/whl-multi-arch/ "rocm[devel]==7.14.1"
+
+# Expand the devel tree into site-packages
+RUN rocm-sdk init
+
+# Target GPU arch for the HIP extension build. Default gfx1100
+# (RX 7900 XTX class); override with --build-arg GPU_ARCH=...
+ARG GPU_ARCH=gfx1100
+ENV PYTORCH_ROCM_ARCH=${GPU_ARCH}
+
+# Build deps safety net; the base image already provides these
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install ninja setuptools wheel packaging
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Get requirements
+COPY pyproject.toml .
+
+# tabbyAPI deps; the rocm extra builds exllamav3_ext from source
+RUN --mount=type=cache,target=/root/.cache/pip \
+    ROCM_HOME="$(python -m rocm_sdk path --root)" python -m pip install --no-build-isolation .[rocm]
+
+RUN rm pyproject.toml
+
+# Copy the current directory contents into the container
+COPY . .
+
+# Make port 5000 available to the world outside this container
+EXPOSE 5000
+
+# Set the entry point
+ENTRYPOINT ["python"]
+
+# Run main.py when the container launches
+CMD ["main.py", "--host", "0.0.0.0"]
