@@ -36,7 +36,7 @@ from common.gen_logging import (
     log_prompt,
     log_request_start,
 )
-from common.hardware import hardware_supports_exllamav3
+from common.hardware import exllamav3_unsupported_gpu_message, hardware_supports_exllamav3
 from common.health import HealthManager
 from common.errors import ContextLengthExceededError, validate_context_requirements
 from common.logger import xlogger
@@ -340,12 +340,7 @@ class ExllamaV3Container:
                 self.autosplit_reserve = [value / 1024 for value in autosplit_reserve_megabytes]
 
         if not hardware_supports_exllamav3(gpu_device_list):
-            gpu_unsupported_message = (
-                "Unable to run ExllamaV3 because an unsupported GPU is "
-                "found in this configuration. \n"
-                "All GPUs must be ampere "
-                "(30 series) or newer. AMD GPUs are not supported."
-            )
+            gpu_unsupported_message = exllamav3_unsupported_gpu_message()
 
             xlogger.warning(gpu_unsupported_message)
 

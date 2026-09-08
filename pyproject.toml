@@ -112,6 +112,16 @@ cu13 = [
     "exllamav3 @ https://github.com/turboderp-org/exllamav3/releases/download/v1.4.7/exllamav3-1.4.7%2Bcu132.torch2.11.0-cp313-cp313-linux_x86_64.whl ; platform_system == 'Linux' and platform_machine == 'x86_64' and python_version == '3.13'",
     "exllamav3 @ https://github.com/turboderp-org/exllamav3/releases/download/v1.4.7/exllamav3-1.4.7%2Bcu132.torch2.11.0-cp312-cp312-linux_x86_64.whl ; platform_system == 'Linux' and platform_machine == 'x86_64' and python_version == '3.12'",
 ]
+rocm = [
+    # Exl3 (ROCm fork; built from source against the installed ROCm torch, so
+    # the git reference needs no per-wheel environment markers. Install with
+    # pip install --no-build-isolation and a torch from AMD's index:
+    # https://repo.amd.com/rocm/whl-multi-arch/)
+    "exllamav3 @ git+https://github.com/Calandracas606/exllamav3@rocm-gfx1100-integration",
+
+    # Flash Linear Attention
+    "flash-linear-attention >= 0.5.0",
+]
 # MARK: Ruff options
 
 [tool.ruff]
