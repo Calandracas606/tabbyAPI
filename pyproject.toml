@@ -117,7 +117,7 @@ rocm = [
     # the git reference needs no per-wheel environment markers. Install with
     # pip install --no-build-isolation and a torch from AMD's index:
     # https://repo.amd.com/rocm/whl-multi-arch/)
-    "exllamav3 @ git+https://github.com/Calandracas606/exllamav3@rocm-gfx1100-integration",
+    "exllamav3 @ git+https://github.com/Calandracas606/exllamav3@integration",
 
     # Flash Linear Attention
     "flash-linear-attention >= 0.5.0",
