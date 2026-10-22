@@ -26,6 +26,7 @@ from endpoints.OAI.types.chat_completion import (
     ChatCompletionResponse,
 )
 from endpoints.OAI.types.embedding import EmbeddingsRequest, EmbeddingsResponse
+from endpoints.OAI.types.responses import ResponsesRequest, ResponsesResponse
 from endpoints.OAI.utils.common_ import load_inline_model
 from endpoints.OAI.utils.chat_completion import (
     apply_chat_template,
@@ -37,6 +38,11 @@ from endpoints.OAI.utils.completion import (
     stream_generate_completion,
 )
 from endpoints.OAI.utils.embeddings import get_embeddings
+from endpoints.OAI.utils.responses import (
+    generate_response,
+    responses_to_chat_request,
+    stream_generate_response,
+)
 
 
 api_name = "OAI"
@@ -44,6 +50,7 @@ router = APIRouter()
 urls = {
     "Completions": "http://{host}:{port}/v1/completions",
     "Chat completions": "http://{host}:{port}/v1/chat/completions",
+    "Responses": "http://{host}:{port}/v1/responses",
 }
 
 # Block when model is still loading while second inline load request comes in
@@ -190,6 +197,66 @@ async def apply_template_request(data: ChatCompletionRequest) -> dict:
 
     prompt, _ = await apply_chat_template(data)
     return {"prompt": prompt}
+
+
+# Responses endpoint
+@router.post(
+    "/v1/responses",
+    dependencies=[Depends(check_api_key), Depends(log_chat_completion_request)],
+)
+@router.post(
+    "/responses",
+    dependencies=[Depends(check_api_key), Depends(log_chat_completion_request)],
+    include_in_schema=False,
+)
+async def responses_request(request: Request, data: ResponsesRequest) -> ResponsesResponse:
+    """
+    Generates a response using the OpenAI Responses API format.
+
+    Translates the request to the chat completions pipeline and reframes the
+    result. If stream = true, this returns an SSE stream of Responses events.
+    """
+
+    raw_json = await request.json()
+    xlogger.debug("[ENDPOINT] /v1/responses", {"raw": raw_json})
+
+    async with load_lock:
+        if data.model:
+            await load_inline_model(data.model, request)
+        await check_model_container()
+        model_path = model.container.model_dir
+
+    if model.container.prompt_template is None:
+        error_message = handle_request_error(
+            "Responses are disabled because a prompt template is not set.",
+            exc_info=False,
+        ).error.message
+        raise HTTPException(422, error_message)
+
+    # Translate the Responses payload onto the chat completions machinery
+    chat_data = responses_to_chat_request(data)
+    prompt, mm_embeddings = await apply_chat_template(chat_data)
+
+    try:
+        disconnect_handler = DisconnectHandler(request, f"{request_tag(request)} responses")
+        await disconnect_handler.poll()
+
+        if data.stream and not config.developer.disable_request_streaming:
+            model.check_context_length(prompt, chat_data, mm_embeddings)
+            return EventSourceResponse(
+                stream_generate_response(
+                    prompt, mm_embeddings, chat_data, request, model_path, disconnect_handler
+                ),
+                ping=get_sse_ping_interval(),
+            )
+        else:
+            response = await generate_response(
+                prompt, mm_embeddings, chat_data, request, model_path, disconnect_handler
+            )
+            return response
+
+    except (CancelledError, InvalidStateError) as ex:
+        raise HTTPException(422, "/v1/responses request cancelled by user.") from ex
 
 
 # Embeddings endpoint
